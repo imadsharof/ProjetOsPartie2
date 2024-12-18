@@ -57,6 +57,9 @@ void Chat::seConnecterAuServeur() {
     }
 
     connexionEtablie = true;
+    
+    // on informe le signalhandler que la connexion est bien établie
+    SignalHandler::setConnectionEstablished(true);
 }
 
 void Chat::envoyerPseudoAuServeur() {
@@ -74,7 +77,12 @@ void Chat::configurerSignaux() {
 void Chat::run() {
     configurerSignaux();
 
-    // Avant connexion, si SIGINT survient, on termine avec code 4
+    // Bloquer SIGINT dans le thread principal avant la connexion
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+
     if (SignalHandler::sigintBeforeConnect()) {
         std::exit(4);
     }
@@ -82,65 +90,70 @@ void Chat::run() {
     seConnecterAuServeur();
 
     if (SignalHandler::sigintBeforeConnect()) {
-        // Si SIGINT juste avant qu'on considère connexion établie
         close(sockfd);
         std::exit(4);
     }
 
     envoyerPseudoAuServeur();
 
-    // Lancer le thread de réception
+    // Maintenant que la connexion est établie, débloquer SIGINT
+    sigemptyset(&set);
+    pthread_sigmask(SIG_SETMASK, &set, NULL);
+
     threadReception = std::thread(&Chat::threadLireDepuisServeur, this);
 
-    // Boucle principale : lire stdin et envoyer messages
     std::string line;
     while (true) {
+        // Tentative de lecture sur stdin
         if(!std::getline(std::cin, line)) {
-            // stdin fermé -> terminaison normale
+            // Ici, soit stdin est fermé (fin normale) soit interrompu par SIGINT
+            if (option_manuel && SignalHandler::sigintAfterConnect()) {
+                // SIGINT reçu après connexion en mode manuel
+                afficherMessagesEnAttente();
+                SignalHandler::clearSigintFlag();
+                // Réinitialise l'état du flux pour pouvoir continuer
+                std::cin.clear();
+                continue;
+            }
+            // Sinon, aucune interruption SIGINT ou stdin fermé => fin normale
             break;
         }
 
-        // Analyser message
         std::string dest, contenu;
         if (!analyserMessageStdin(line, dest, contenu)) {
-            // Format invalide, ignorer
             continue;
         }
 
-        // Vérifier longueur contenu
         if (contenu.size() > 1024) {
-            // Le serveur va déconnecter, mais on évite d'envoyer
             std::cerr << "Message trop long, ignoré." << std::endl;
             continue;
         }
 
         envoyerMessageAuServeur(dest, contenu);
 
-        // Afficher le message envoyé (si pas bot)
         if(!option_bot) {
             std::lock_guard<std::mutex> lock(affichageMutex);
             std::cout << "[\x1B[4m" << pseudo_utilisateur << "\x1B[0m] " << contenu << std::endl;
         }
 
-        // Si manuel, on affiche les messages en attente après envoi
         if (option_manuel) {
             afficherMessagesEnAttente();
         }
 
-        // Gérer SIGINT en mode manuel
-        if (SignalHandler::sigintAfterConnect() && option_manuel) {
+        // Vérifier si SIGINT reçu après connexion en mode manuel
+        if (option_manuel && SignalHandler::sigintAfterConnect()) {
             afficherMessagesEnAttente();
             SignalHandler::clearSigintFlag();
         }
     }
 
-    // Fin normale (stdin fermé)
     close(sockfd);
     if (threadReception.joinable()) {
         threadReception.join();
     }
     std::exit(0);
 }
+
 
 void Chat::threadLireDepuisServeur() {
     char buffer[2048];

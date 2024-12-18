@@ -7,6 +7,7 @@ public:
     static bool sigintBeforeConnect();
     static bool sigintAfterConnect();
     static void clearSigintFlag();
+    static void setConnectionEstablished(bool established);
 };
 
 #endif

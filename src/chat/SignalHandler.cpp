@@ -31,3 +31,7 @@ bool SignalHandler::sigintAfterConnect() {
 void SignalHandler::clearSigintFlag() {
     g_sigintReceived = false;
 }
+
+void SignalHandler::setConnectionEstablished(bool established) {
+    g_connectionEstablished = established;
+}
