@@ -1,39 +1,40 @@
 # Définition des répertoires et des fichiers
 SRCDIR  := ./src
 BINDIR  := ./
-EXE     := $(BINDIR)start  # Remplace "chat" par "start"
+CHATDIR := $(SRCDIR)/chat
+SERVDIR := $(SRCDIR)/serveur
 
-# Ajout des fichiers du serveur
-SERV_SRCDIR := $(SRCDIR)/serveur
-SERV_SOURCES := $(SERV_SRCDIR)/main.cpp
-SERV_OBJECTS := $(SERV_SOURCES:.cpp=.o)
+EXE     := $(BINDIR)start  # le client
 SERV_EXE := $(BINDIR)serveur-chat
 
 # Compilation avec g++
 CC      := g++
 CFLAGS  := -Wall -Wextra -O3 -std=c++20 -g
 
-# Fichiers sources et objets pour le client
-SOURCES := $(SRCDIR)/main.cpp $(SRCDIR)/Chat.cpp
-OBJECTS := $(SOURCES:.cpp=.o)
+# Sources pour le client
+CHAT_SOURCES := $(CHATDIR)/main.cpp $(CHATDIR)/Chat.cpp $(CHATDIR)/ClientSocket.cpp $(CHATDIR)/SignalHandler.cpp
+CHAT_OBJECTS := $(CHAT_SOURCES:.cpp=.o)
 
-# Cible par défaut
+# Sources pour le serveur
+SERV_SOURCES := $(SERVDIR)/main.cpp
+SERV_OBJECTS := $(SERV_SOURCES:.cpp=.o)
+
 .PHONY: all clean
 
 all: $(EXE) $(SERV_EXE)
 
+$(EXE): $(CHAT_OBJECTS)
+	$(CC) $(CFLAGS) $(CHAT_OBJECTS) -o $(EXE)
+
 $(SERV_EXE): $(SERV_OBJECTS)
 	$(CC) $(CFLAGS) $(SERV_OBJECTS) -o $(SERV_EXE)
 
-$(SERV_SRCDIR)/%.o: $(SERV_SRCDIR)/%.cpp
+$(CHATDIR)/%.o: $(CHATDIR)/%.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(EXE): $(OBJECTS)
-	$(CC) $(OBJECTS) -o $(EXE)
-
-$(SRCDIR)/%.o: $(SRCDIR)/%.cpp
+$(SERVDIR)/%.o: $(SERVDIR)/%.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	@rm -f $(OBJECTS) $(EXE) $(SERV_OBJECTS) $(SERV_EXE)
+	rm -f $(CHAT_OBJECTS) $(SERV_OBJECTS) $(EXE) $(SERV_EXE)
 
