@@ -1,0 +1,54 @@
+#!/bin/bash
+
+if [[ $# -ne 1 && $# -ne 2 ]]; then
+    echo "chat-bot destinataire [pseudo]" >&2 
+    exit 1 
+fi
+
+pseudo_destinataire="$1"
+pseudo_utilisateur="${2:-bot}"
+liste_bot="liste-bot.txt"
+
+coproc CHAT_PIPES { ./chat $pseudo_utilisateur --bot; } 
+
+function reponse_liste_bot(){
+    local command="$1" 
+    local response=$(grep -m 1 "^${command} " $liste_bot | cut -d' ' -f2-)
+
+    if [ -n "$response" ]; then
+        echo "$response" >&"${CHAT_PIPES[1]}"
+    else
+        echo "🤖 ?" >&"${CHAT_PIPES[1]}"
+    fi
+}
+
+function reponse(){
+    local input=$(echo "$1" | cut -d' ' -f2-)
+    case $input in
+        "liste")
+            echo "$(ls)" >&"${CHAT_PIPES[1]}"
+            ;;
+        "qui suis-je")
+            echo "$pseudo_destinataire" >&"${CHAT_PIPES[1]}"
+            ;;
+        "au revoir")
+            exit 0
+            ;;
+        li\ *)
+            local file=$(echo "$input" | cut -d' ' -f2-)
+            if [ -f "$file" ]; then
+                cat "$file" >&"${CHAT_PIPES[1]}"
+                echo >&"${CHAT_PIPES[1]}"
+            else
+                echo "Erreur : fichier '$file' introuvable." >&"${CHAT_PIPES[1]}"
+            fi
+            ;;
+        *)
+            reponse_liste_bot "$input"
+            ;;
+    esac
+}
+
+while read -r message <&"${CHAT_PIPES[0]}"; do
+    reponse "$message"
+done

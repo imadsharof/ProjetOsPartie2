@@ -1,0 +1,44 @@
+#!/bin/bash
+
+if [[ $# -ne 1 ]]; then
+    echo "chat pseudo-utilisateur " >&2 
+    exit 1 
+fi
+
+pseudo_utilisateur="$1"
+pseudo_destinataire=""
+
+coproc CHAT_PIPES { ./chat $pseudo_utilisateur; } 
+
+echo "A quel destinataire voulez vous envoyer des messages ?"
+read -r pseudo_destinataire
+
+function nouveau_destinataire(){
+    echo 'Veuillez choisir un nouveau destinataire ou réappuyer sur ctrl+D pour quitter le programme'
+    read pseudo_destinataire
+    if [ $? -eq 1 ]; then
+        echo 'signal ctrl+D reçu deux fois, programme terminé'
+        exit 0
+    fi
+}
+
+input=""
+
+read -r input &
+
+while true; do
+    # Lire un message reçu du chat
+    if read -r message <&"${CHAT_PIPES[0]}"; then
+        echo "$message"
+    fi
+
+    # Si un message a été saisi, l'envoyer
+    if [[ $? -eq 1 ]]; then # ctrl+D reçu
+        nouveau_destinataire
+    elif [[ -n "$input" ]]; then
+        texte="$pseudo_destinataire $input"
+        echo "$texte" >&"${CHAT_PIPES[1]}"
+        input=""  # Réinitialiser l'input
+        read -r input &
+    fi
+done
