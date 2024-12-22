@@ -4,7 +4,7 @@ BINDIR  := ./
 CHATDIR := $(SRCDIR)/chat
 SERVDIR := $(SRCDIR)/serveur
 
-EXE     := $(BINDIR)start  # le client
+EXE     := $(BINDIR)chat # le client
 SERV_EXE := $(BINDIR)serveur-chat
 
 # Compilation avec g++
