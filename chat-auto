@@ -1,44 +1,84 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-if [[ $# -ne 1 ]]; then
-    echo "chat pseudo-utilisateur " >&2 
-    exit 1 
+###############################################################################
+# ./chat-auto pseudo_utilisateur
+#
+# 1) Demande un destinataire au lancement
+# 2) Tant que pas de double Ctrl+D, chaque ligne saisie est préfixée
+#    du destinataire et envoyée à ./start pseudo_utilisateur
+# 3) Lorsque Ctrl+D est pressé, on demande un nouveau destinataire.
+#    Si on re-reçoit Ctrl+D ou un destinataire vide, on quitte.
+###############################################################################
+
+if [[ $# -lt 1 ]]; then
+    echo "Usage: $0 pseudo_utilisateur" >&2
+    exit 1
 fi
 
-pseudo_utilisateur="$1"
-pseudo_destinataire=""
+pseudo_user="$1"
+pseudo_dest=""
 
-coproc CHAT_PIPES { ./chat $pseudo_utilisateur; } 
-
-echo "A quel destinataire voulez vous envoyer des messages ?"
-read -r pseudo_destinataire
-
-function nouveau_destinataire(){
-    echo 'Veuillez choisir un nouveau destinataire ou réappuyer sur ctrl+D pour quitter le programme'
-    read pseudo_destinataire
-    if [ $? -eq 1 ]; then
-        echo 'signal ctrl+D reçu deux fois, programme terminé'
-        exit 0
-    fi
+# Lancement du client en coproc
+coproc CHAT_PROC {
+    ./start "$pseudo_user"
 }
 
-input=""
+# Vérifier que le coproc a bien démarré
+if [[ -z "${CHAT_PROC_PID}" ]]; then
+    echo "Erreur : impossible de lancer le coproc pour ./start" >&2
+    exit 1
+fi
 
-read -r input &
+# Rediriger les FD pour plus de clarté
+exec 3<&"${CHAT_PROC[0]}"  # lecture
+exec 4>&"${CHAT_PROC[1]}"  # écriture
 
+# Lecture en continu de la sortie du client chat (FD 3),
+# on la réaffiche dans ce script. Cela se fait en tâche de fond.
+{
+    while true; do
+        if ! read -r line <&3; then
+            # Descripteur fermé => le programme ./start a terminé
+            exit 0
+        fi
+        echo "$line"
+    done
+} &
+
+# PID de la tâche de fond qui lit la sortie du client
+reader_pid=$!
+
+# Fonction demandant un nouveau destinataire
+# Si Ctrl+D ou destinataire vide => fin du script
+nouveau_destinataire() {
+    echo "Entrez le destinataire (ou Ctrl+D pour quitter) :"
+    if ! read -r tmp; then
+        echo "Fin du script (Ctrl+D)."
+        kill "$CHAT_PROC_PID" 2>/dev/null
+        kill "$reader_pid" 2>/dev/null
+        exit 0
+    fi
+    if [[ -z "$tmp" ]]; then
+        echo "Fin du script (destinataire vide)."
+        kill "$CHAT_PROC_PID" 2>/dev/null
+        kill "$reader_pid" 2>/dev/null
+        exit 0
+    fi
+    pseudo_dest="$tmp"
+}
+
+# Au démarrage, on demande un destinataire
+nouveau_destinataire
+
+# Boucle principale
 while true; do
-    # Lire un message reçu du chat
-    if read -r message <&"${CHAT_PIPES[0]}"; then
-        echo "$message"
-    fi
-
-    # Si un message a été saisi, l'envoyer
-    if [[ $? -eq 1 ]]; then # ctrl+D reçu
-        nouveau_destinataire
-    elif [[ -n "$input" ]]; then
-        texte="$pseudo_destinataire $input"
-        echo "$texte" >&"${CHAT_PIPES[1]}"
-        input=""  # Réinitialiser l'input
-        read -r input &
-    fi
+    echo "Saisissez vos messages (Ctrl+D pour changer de destinataire) :"
+    # Tant qu'on lit des lignes, on les envoie
+    while read -r msg; do
+        # Préfixage
+        echo "$pseudo_dest $msg" >&4
+    done
+    # read a échoué => Ctrl+D => changer de destinataire
+    nouveau_destinataire
 done
+
