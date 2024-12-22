@@ -194,9 +194,9 @@ void Chat::threadLireDepuisServeur() {
 void Chat::afficherMessageRecu(const std::string &expediteur, const std::string &message) {
     std::lock_guard<std::mutex> lock(affichageMutex);
     if (option_bot) {
-        std::cout << "[" << expediteur << "] " << message << std::endl;
+        std::cout << "[" << expediteur << "] " << message;
     } else {
-        std::cout << "[\x1B[4m" << expediteur << "\x1B[0m] " << message << std::endl;
+        std::cout << "[\x1B[4m" << expediteur << "\x1B[0m] " << message;
     }
 }
 

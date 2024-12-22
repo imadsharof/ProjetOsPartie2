@@ -20,12 +20,12 @@ pseudo_dest=""
 
 # Lancement du client en coproc
 coproc CHAT_PROC {
-    ./start "$pseudo_user"
+    ./chat "$pseudo_user"
 }
 
 # Vérifier que le coproc a bien démarré
 if [[ -z "${CHAT_PROC_PID}" ]]; then
-    echo "Erreur : impossible de lancer le coproc pour ./start" >&2
+    echo "Erreur : impossible de lancer le coproc pour ./chat" >&2
     exit 1
 fi
 
